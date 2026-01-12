@@ -11,7 +11,24 @@ const PORT = process.env.PORT || 3000;
 
 // Serve static files from the dist directory
 const distPath = resolve(__dirname, 'dist');
-app.use(express.static(distPath));
+
+// Set proper MIME types for PWA files
+app.use((req, res, next) => {
+  if (req.path.endsWith('.webmanifest')) {
+    res.type('application/manifest+json');
+  } else if (req.path.endsWith('.js') && req.path.includes('sw')) {
+    res.type('application/javascript');
+  }
+  next();
+});
+
+app.use(express.static(distPath, {
+  setHeaders: (res, path) => {
+    if (path.endsWith('.webmanifest')) {
+      res.setHeader('Content-Type', 'application/manifest+json');
+    }
+  }
+}));
 
 // Health check endpoint
 app.get('/health', (req, res) => {
