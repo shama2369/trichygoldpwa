@@ -1027,11 +1027,11 @@ export default function App() {
         {/* Itag Input - Only for Diamond and DiamondG */}
         {(jewelryType === "Diamond" || jewelryType === "DiamondG") && (
           <div>
-            <label className="block text-sm font-medium mb-1">Itag (Initial Tag Price)</label>
+            <label className="block text-sm font-medium mb-1">Itag</label>
             <input
               type="number"
               step="0.01"
-              placeholder="Enter initial tag price"
+              placeholder="Enter itag"
               value={itag}
               onChange={(e) => setItag(e.target.value)}
               className="p-2 border rounded w-full"
