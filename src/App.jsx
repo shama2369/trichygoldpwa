@@ -34,6 +34,7 @@ export default function App() {
   const [touristCurrency18K, setTouristCurrency18K] = useState(""); // Currency code for 18K tourist
   const [diamondPrice, setDiamondPrice] = useState(""); // Diamond price for DiamondG
   const [diamondCarat, setDiamondCarat] = useState(""); // Diamond carat for DiamondG
+  const [itag, setItag] = useState(""); // Initial tag price for discount calculation
 
   // --- Calculations ---
   const W = parseFloat(weight) || 0;
@@ -105,6 +106,34 @@ export default function App() {
       };
     }
     return null;
+  };
+
+  // Calculate discount percentage from Itag to current item price
+  const calculateDiscountFromItag = () => {
+    if (!itag || parseFloat(itag) <= 0) return null;
+    
+    const itagValue = parseFloat(itag);
+    let currentItemPrice = 0;
+    
+    if (jewelryType === "Diamond" || jewelryType === "DiamondG") {
+      // Current item price after discount
+      currentItemPrice = Mtag * (1 - discount / 100);
+    } else {
+      // For other types, use the final price calculation
+      currentItemPrice = Pcash || 0;
+    }
+    
+    if (currentItemPrice <= 0) return null;
+    
+    // Calculate discount percentage: ((Itag - ItemPrice) / Itag) * 100
+    const discountPercent = ((itagValue - currentItemPrice) / itagValue) * 100;
+    
+    return {
+      itag: itagValue,
+      itemPrice: currentItemPrice,
+      discountPercent: discountPercent,
+      discountAmount: itagValue - currentItemPrice
+    };
   };
 
   // Tourist currency buffer mapping (for 22K/24K)
@@ -507,6 +536,7 @@ export default function App() {
                   setBuffer("");
                   setDiamondPrice("");
                   setDiamondCarat("");
+                  setItag("");
                   setGold24KType("");
                   setGold24KWeight("");
                   setInputMode24K("weight");
@@ -994,6 +1024,58 @@ export default function App() {
           </div>
         )}
 
+        {/* Itag Input - Only for Diamond and DiamondG */}
+        {(jewelryType === "Diamond" || jewelryType === "DiamondG") && (
+          <div>
+            <label className="block text-sm font-medium mb-1">Itag (Initial Tag Price)</label>
+            <input
+              type="number"
+              step="0.01"
+              placeholder="Enter initial tag price"
+              value={itag}
+              onChange={(e) => setItag(e.target.value)}
+              className="p-2 border rounded w-full"
+            />
+            {(() => {
+              const itagCalc = calculateDiscountFromItag();
+              if (itagCalc && itagCalc.discountPercent >= 0 && itagCalc.discountPercent <= 100) {
+                return (
+                  <div className="mt-2 p-2 bg-blue-50 rounded border border-blue-200">
+                    <div className="text-xs text-gray-600 mb-1">Calculated Discount:</div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-medium">Discount %:</span>
+                      <span className="text-lg font-bold text-blue-700">
+                        {itagCalc.discountPercent.toFixed(2)}%
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center mt-1">
+                      <span className="text-xs text-gray-600">Discount Amount:</span>
+                      <span className="text-sm font-medium text-gray-800">
+                        {itagCalc.discountAmount.toFixed(2)} AED
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center mt-1">
+                      <span className="text-xs text-gray-600">Item Price:</span>
+                      <span className="text-sm font-medium text-gray-800">
+                        {itagCalc.itemPrice.toFixed(2)} AED
+                      </span>
+                    </div>
+                  </div>
+                );
+              } else if (itagCalc && itagCalc.discountPercent < 0) {
+                return (
+                  <div className="mt-2 p-2 bg-red-50 rounded border border-red-200">
+                    <div className="text-xs text-red-600">
+                      ⚠️ Item price ({itagCalc.itemPrice.toFixed(2)} AED) is higher than Itag ({itagCalc.itag.toFixed(2)} AED)
+                    </div>
+                  </div>
+                );
+              }
+              return null;
+            })()}
+          </div>
+        )}
+
         {/* Gold Rate Input - Only for Gold (24K, 22K, 18K) - DiamondG moved above */}
         {jewelryType !== "Diamond" && jewelryType !== "DiamondG" && (
           <div>
@@ -1267,6 +1349,21 @@ export default function App() {
                 <span>Item Price (after discount):</span>
                 <span className="font-medium">{(Mtag * (1 - discount / 100)).toFixed(2)} AED</span>
               </div>
+              {/* Itag Discount Calculation Display */}
+              {(() => {
+                const itagCalc = calculateDiscountFromItag();
+                if (itagCalc && itagCalc.discountPercent >= 0 && itagCalc.discountPercent <= 100) {
+                  return (
+                    <div className="flex justify-between mt-2 p-2 bg-blue-50 rounded border border-blue-200">
+                      <span className="text-sm">Discount from Itag ({itagCalc.itag.toFixed(2)} AED):</span>
+                      <span className="text-sm font-bold text-blue-700">
+                        {itagCalc.discountPercent.toFixed(2)}%
+                      </span>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
               <hr className="my-2" />
               {method === "cash" && (
                 <>
