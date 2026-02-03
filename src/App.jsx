@@ -35,6 +35,7 @@ export default function App() {
   const [diamondPrice, setDiamondPrice] = useState(""); // Diamond price for DiamondG
   const [diamondCarat, setDiamondCarat] = useState(""); // Diamond carat for DiamondG
   const [itag, setItag] = useState(""); // Initial tag price for discount calculation
+  const [diamondGType, setDiamondGType] = useState("otherItems"); // "nosePin" or "otherItems" for DiamondG
 
   // --- Calculations ---
   const W = parseFloat(weight) || 0;
@@ -48,12 +49,20 @@ export default function App() {
       }
       const Pg = parseFloat(goldRate) || 0;
       const Dc = parseFloat(diamondCarat) || 0;
-      // If carat is less than 0.50, diamond price is fixed at 450 AED
-      const Dp = (Dc > 0 && Dc < 0.50) ? 450 : (parseFloat(diamondPrice) || 0);
-      // Formula: (gms * gold_price + diamond_price * 3.65 * diamond_carat + gms * 55 + 20) * 5.3
-      // Making charge: gms * 55 (since 15 * 3.65 = 54.75 ≈ 55)
-      const totalCost = W * Pg + Dp * 3.65 * Dc + W * 55 + 20;
-      return totalCost * 5.3;
+      // Diamond price is fixed at 500 AED regardless of carat
+      const Dp = 500;
+      // Making charge: 60 (fixed) for "Nose Pin", 75 per gram for "Other Items"
+      let totalCost;
+      if (diamondGType === "nosePin") {
+        // Nose Pin: Making charge is fixed at 60 AED (not multiplied by weight)
+        totalCost = W * Pg + Dp * 3.65 * Dc + 60 + 20;
+      } else {
+        // Other Items: Making charge is 75 per gram
+        totalCost = W * Pg + Dp * 3.65 * Dc + W * 75 + 20;
+      }
+      // New formula: Calculate 60% of total cost, add to total cost, then multiply by 3.33333
+      const totalCostWith60Percent = totalCost + (totalCost * 0.6); // totalCost * 1.6
+      return totalCostWith60Percent * 3.33333;
     }
     return 0;
   };
@@ -537,6 +546,7 @@ export default function App() {
                   setDiamondPrice("");
                   setDiamondCarat("");
                   setItag("");
+                  setDiamondGType("otherItems");
                   setGold24KType("");
                   setGold24KWeight("");
                   setInputMode24K("weight");
@@ -945,6 +955,34 @@ export default function App() {
         {/* Diamond Price and Carat Inputs - Only for DiamondG */}
         {jewelryType === "DiamondG" && (
           <>
+            {/* DiamondG Type Selection Buttons */}
+            <div className="mb-3">
+              <label className="block text-sm font-medium mb-2">Type</label>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setDiamondGType("nosePin")}
+                  className={`px-4 py-2 rounded text-sm font-medium transition-all ${
+                    diamondGType === "nosePin"
+                      ? "bg-purple-500 text-white shadow-md"
+                      : "bg-white text-gray-700 hover:bg-gray-50 hover:shadow-sm border border-gray-200"
+                  }`}
+                >
+                  Nose Pin
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDiamondGType("otherItems")}
+                  className={`px-4 py-2 rounded text-sm font-medium transition-all ${
+                    diamondGType === "otherItems"
+                      ? "bg-purple-500 text-white shadow-md"
+                      : "bg-white text-gray-700 hover:bg-gray-50 hover:shadow-sm border border-gray-200"
+                  }`}
+                >
+                  Other Items
+                </button>
+              </div>
+            </div>
             <div>
               <label className="block text-sm font-medium mb-1">Diamond Carat</label>
               <input
@@ -952,34 +990,8 @@ export default function App() {
                 step="0.01"
                 placeholder="Enter diamond carat"
                 value={diamondCarat}
-                onChange={(e) => {
-                  setDiamondCarat(e.target.value);
-                  // If carat < 0.50, clear diamond price field (it's fixed at 450 internally)
-                  const carat = parseFloat(e.target.value) || 0;
-                  if (carat > 0 && carat < 0.50) {
-                    setDiamondPrice(""); // Keep blank, but calculation uses 450
-                  } else if (carat >= 0.50 && !diamondPrice) {
-                    // Field becomes editable when carat >= 0.50
-                    // Don't auto-set value, let user enter
-                  }
-                }}
+                onChange={(e) => setDiamondCarat(e.target.value)}
                 className="p-2 border rounded w-full"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Diamond Price</label>
-              <input
-                type="number"
-                placeholder={parseFloat(diamondCarat) > 0 && parseFloat(diamondCarat) < 0.50 ? "Fixed" : "Enter price"}
-                value={parseFloat(diamondCarat) > 0 && parseFloat(diamondCarat) < 0.50 ? "" : diamondPrice}
-                onChange={(e) => {
-                  // Only allow editing if carat >= 0.50
-                  if (!(parseFloat(diamondCarat) > 0 && parseFloat(diamondCarat) < 0.50)) {
-                    setDiamondPrice(e.target.value);
-                  }
-                }}
-                disabled={parseFloat(diamondCarat) > 0 && parseFloat(diamondCarat) < 0.50}
-                className={`p-2 border rounded w-full ${parseFloat(diamondCarat) > 0 && parseFloat(diamondCarat) < 0.50 ? "bg-gray-100 cursor-not-allowed" : ""}`}
               />
             </div>
             {/* Tag Price Display - Below Diamond Carat */}
