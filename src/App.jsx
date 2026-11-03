@@ -51,11 +51,11 @@ export default function App() {
       const Dc = parseFloat(diamondCarat) || 0;
       // Diamond price is fixed at 500 AED regardless of carat
       const Dp = 500;
-      // Making charge: 60 (fixed) for "Nose Pin", 75 per gram for "Other Items"
+      // Making charge: 80 (fixed) for "Nose Pin", 75 per gram for "Other Items"
       let totalCost;
       if (diamondGType === "nosePin") {
-        // Nose Pin: Making charge is fixed at 60 AED (not multiplied by weight)
-        totalCost = W * Pg + Dp * 3.65 * Dc + 60 + 20;
+        // Nose Pin: Making charge is fixed at 80 AED (not multiplied by weight)
+        totalCost = W * Pg + Dp * 3.65 * Dc + 80 + 20;
       } else {
         // Other Items: Making charge is 75 per gram
         totalCost = W * Pg + Dp * 3.65 * Dc + W * 75 + 20;
@@ -89,33 +89,13 @@ export default function App() {
   const Pg = getGoldPrice();
   const Ebuf = parseFloat(buffer) || 0;
   const f = (parseFloat(cardFee) || 0) / 100;
+  // DiamondG: cash discount on the printed tag rounded DOWN to a whole %, and the bill worked from that %
+  const dgPtag = parseFloat(itag) || 0;
+  const dgRawPrice = Mtag * (1 - discount / 100);
+  const dgCashDisc = (jewelryType === "DiamondG" && dgPtag > 0 && discount > 0 && dgRawPrice <= dgPtag)
+    ? Math.floor(((dgPtag - dgRawPrice) / dgPtag) * 100 + 1e-9) : null;
+  const dgPrice = dgCashDisc !== null ? dgPtag * (1 - dgCashDisc / 100) : dgRawPrice;
 
-  // Calculate adjusted discount for Diamond/DiamondG when customer doesn't pay ATF
-  const calculateAdjustedDiscount = () => {
-    if ((jewelryType === "Diamond" || jewelryType === "DiamondG") && method === "card" && Mtag > 0 && discount > 0) {
-      // Current calculation with ATF
-      const currentItemPrice = Mtag * (1 - discount / 100);
-      const currentTotalPrice = currentItemPrice * 1.05;
-      const currentATF = currentTotalPrice * f;
-      const currentTotalBill = currentTotalPrice + currentATF;
-      
-      // Without ATF, target Total Price = current Total Bill
-      const targetTotalPrice = currentTotalBill;
-      const targetItemPrice = targetTotalPrice / 1.05;
-      
-      // Calculate required discount
-      const requiredDiscount = ((Mtag - targetItemPrice) / Mtag) * 100;
-      
-      return {
-        currentDiscount: parseFloat(discount) || 0,
-        adjustedDiscount: requiredDiscount,
-        currentTotalBill: currentTotalBill,
-        targetTotalPrice: targetTotalPrice,
-        discountDifference: (parseFloat(discount) || 0) - requiredDiscount
-      };
-    }
-    return null;
-  };
 
   // Calculate discount percentage from Itag to current item price
   const calculateDiscountFromItag = () => {
@@ -124,7 +104,10 @@ export default function App() {
     const itagValue = parseFloat(itag);
     let currentItemPrice = 0;
     
-    if (jewelryType === "Diamond" || jewelryType === "DiamondG") {
+    if (jewelryType === "DiamondG") {
+      // DiamondG: use the price from the whole-number (rounded down) Ptag discount
+      currentItemPrice = dgPrice;
+    } else if (jewelryType === "Diamond") {
       // Current item price after discount
       currentItemPrice = Mtag * (1 - discount / 100);
     } else {
@@ -812,6 +795,20 @@ export default function App() {
           </div>
         )}
 
+        {/* Gold Rate Input - Only for DiamondG (above weight) */}
+        {jewelryType === "DiamondG" && (
+          <div>
+            <label className="block text-sm font-medium mb-1">Gold Price / gm (AED)</label>
+            <input
+              type="number"
+              placeholder="Enter gold price"
+              value={goldRate}
+              onChange={(e) => setGoldRate(e.target.value)}
+              className="p-2 border rounded w-full"
+            />
+          </div>
+        )}
+
         {/* Weight Input with OCR - Always show */}
         <div>
             <label className="block text-sm font-medium mb-1">
@@ -840,20 +837,6 @@ export default function App() {
             </label>
           </div>
         </div>
-
-        {/* Gold Rate Input - Only for DiamondG (moved below weight) */}
-        {jewelryType === "DiamondG" && (
-          <div>
-            <label className="block text-sm font-medium mb-1">Gold Price / gm (AED)</label>
-            <input
-              type="number"
-              placeholder="Enter gold price"
-              value={goldRate}
-              onChange={(e) => setGoldRate(e.target.value)}
-              className="p-2 border rounded w-full"
-            />
-          </div>
-        )}
 
         {/* Tag Price Input with OCR - Hide for DiamondG (calculated automatically) */}
         {jewelryType !== "DiamondG" && (
@@ -955,6 +938,17 @@ export default function App() {
         {/* Diamond Price and Carat Inputs - Only for DiamondG */}
         {jewelryType === "DiamondG" && (
           <>
+            <div>
+              <label className="block text-sm font-medium mb-1">Diamond Carat</label>
+              <input
+                type="number"
+                step="0.01"
+                placeholder="Enter diamond carat"
+                value={diamondCarat}
+                onChange={(e) => setDiamondCarat(e.target.value)}
+                className="p-2 border rounded w-full"
+              />
+            </div>
             {/* DiamondG Type Selection Buttons */}
             <div className="mb-3">
               <label className="block text-sm font-medium mb-2">Type</label>
@@ -983,17 +977,6 @@ export default function App() {
                 </button>
               </div>
             </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Diamond Carat</label>
-              <input
-                type="number"
-                step="0.01"
-                placeholder="Enter diamond carat"
-                value={diamondCarat}
-                onChange={(e) => setDiamondCarat(e.target.value)}
-                className="p-2 border rounded w-full"
-              />
-            </div>
             {/* Tag Price Display - Below Diamond Carat */}
             <div className="bg-white border border-gray-200 rounded p-3">
               <div className="flex justify-between items-center">
@@ -1004,6 +987,21 @@ export default function App() {
               </div>
             </div>
           </>
+        )}
+
+        {/* Ptag Input - Only for Diamond and DiamondG */}
+        {(jewelryType === "Diamond" || jewelryType === "DiamondG") && (
+          <div>
+            <label className="block text-sm font-medium mb-1">Ptag (Printed Tag)</label>
+            <input
+              type="number"
+              step="0.01"
+              placeholder="Enter printed tag (Ptag)"
+              value={itag}
+              onChange={(e) => setItag(e.target.value)}
+              className="p-2 border rounded w-full"
+            />
+          </div>
         )}
 
         {/* Discount Percent Input - Only for Diamond and DiamondG */}
@@ -1036,18 +1034,9 @@ export default function App() {
           </div>
         )}
 
-        {/* Itag Input - Only for Diamond and DiamondG */}
+        {/* Calculated discount from Ptag - below the discount box */}
         {(jewelryType === "Diamond" || jewelryType === "DiamondG") && (
           <div>
-            <label className="block text-sm font-medium mb-1">Itag</label>
-            <input
-              type="number"
-              step="0.01"
-              placeholder="Enter itag"
-              value={itag}
-              onChange={(e) => setItag(e.target.value)}
-              className="p-2 border rounded w-full"
-            />
             {(() => {
               const itagCalc = calculateDiscountFromItag();
               if (itagCalc && itagCalc.discountPercent >= 0 && itagCalc.discountPercent <= 100) {
@@ -1057,7 +1046,7 @@ export default function App() {
                     <div className="flex justify-between items-center">
                       <span className="text-sm font-medium">Discount %:</span>
                       <span className="text-lg font-bold text-blue-700">
-                        {itagCalc.discountPercent.toFixed(2)}%
+                        {itagCalc.discountPercent.toFixed(0)}%
                       </span>
                     </div>
                     <div className="flex justify-between items-center mt-1">
@@ -1078,7 +1067,7 @@ export default function App() {
                 return (
                   <div className="mt-2 p-2 bg-red-50 rounded border border-red-200">
                     <div className="text-xs text-red-600">
-                      ⚠️ Item price ({itagCalc.itemPrice.toFixed(2)} AED) is higher than Itag ({itagCalc.itag.toFixed(2)} AED)
+                      ⚠️ Item price ({itagCalc.itemPrice.toFixed(2)} AED) is higher than Ptag ({itagCalc.itag.toFixed(2)} AED)
                     </div>
                   </div>
                 );
@@ -1283,7 +1272,7 @@ export default function App() {
             }`}
             onClick={() => setMethod("cash")}
           >
-            KT
+            CC
           </button>
           <button
             className={`px-3 py-1 rounded text-sm ${
@@ -1291,8 +1280,18 @@ export default function App() {
             }`}
             onClick={() => setMethod("card")}
           >
-            AT
+            CD
             </button>
+          {jewelryType === "DiamondG" && (
+            <button
+              className={`px-3 py-1 rounded text-sm ${
+                method === "nc" ? "bg-green-600 text-white" : "bg-green-100 text-green-800"
+              }`}
+              onClick={() => setMethod("nc")}
+            >
+              NC
+            </button>
+          )}
         </div>
 
       {/* Sales View Toggle - Always show */}
@@ -1349,6 +1348,12 @@ export default function App() {
           ) : jewelryType === "Diamond" ? (
             // Diamond calculation display
             <>
+              {parseFloat(itag) > 0 && (
+                <div className="flex justify-between p-2 bg-blue-50 rounded border border-blue-200">
+                  <span className="font-semibold">Ptag (Printed Tag):</span>
+                  <span className="font-bold text-blue-700">{parseFloat(itag).toFixed(2)} AED</span>
+                </div>
+              )}
               <div className="flex justify-between">
                 <span>Tag Price:</span>
                 <span className="font-medium">{Mtag.toFixed(2)} AED</span>
@@ -1361,15 +1366,15 @@ export default function App() {
                 <span>Item Price (after discount):</span>
                 <span className="font-medium">{(Mtag * (1 - discount / 100)).toFixed(2)} AED</span>
               </div>
-              {/* Itag Discount Calculation Display */}
+              {/* Ptag Discount Calculation Display */}
               {(() => {
                 const itagCalc = calculateDiscountFromItag();
                 if (itagCalc && itagCalc.discountPercent >= 0 && itagCalc.discountPercent <= 100) {
                   return (
                     <div className="flex justify-between mt-2 p-2 bg-blue-50 rounded border border-blue-200">
-                      <span className="text-sm">Discount from Itag ({itagCalc.itag.toFixed(2)} AED):</span>
+                      <span className="text-sm">Discount from Ptag ({itagCalc.itag.toFixed(2)} AED):</span>
                       <span className="text-sm font-bold text-blue-700">
-                        {itagCalc.discountPercent.toFixed(2)}%
+                        {itagCalc.discountPercent.toFixed(0)}%
                       </span>
                     </div>
                   );
@@ -1413,51 +1418,68 @@ export default function App() {
                     <span>Total Bill (AT):</span>
                     <span className="text-yellow-700">{(((Mtag * (1 - discount / 100)) * 1.05) * (1 + f)).toFixed(2)} AED</span>
                   </div>
-                  {/* Adjusted Discount Calculator (No ATF) - Only in Sales View */}
-                  {salesView && (() => {
-                    const adjusted = calculateAdjustedDiscount();
-                    if (adjusted && adjusted.adjustedDiscount >= 0 && adjusted.adjustedDiscount <= 100) {
-                      return (
-                        <div className="flex justify-between text-sm mt-2 p-2 bg-gray-50 rounded border border-gray-200">
-                          <span className="text-gray-700">Adj Dis:</span>
-                          <span className="font-bold text-gray-800">{adjusted.adjustedDiscount.toFixed(2)}%</span>
-                        </div>
-                      );
-                    }
-                    return null;
-                  })()}
                 </>
               )}
             </>
           ) : jewelryType === "DiamondG" ? (
             // DiamondG calculation display (same as Diamond)
             <>
-              <div className="flex justify-between">
-                <span>Tag Price:</span>
-                <span className="font-medium">{Mtag.toFixed(2)} AED</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Discount ({discount}%):</span>
-                <span className="font-medium">-{(Mtag * discount / 100).toFixed(2)} AED</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Item Price (after discount):</span>
-                <span className="font-medium">{(Mtag * (1 - discount / 100)).toFixed(2)} AED</span>
-              </div>
-              <hr className="my-2" />
+              {/* DiamondG sheet starts from the printed tag (Ptag); new tag is not shown */}
+              {method !== "nc" && (() => {
+                const ptagValue = parseFloat(itag) || 0;
+                const itemPrice = dgPrice;
+                if (ptagValue <= 0) {
+                  return (
+                    <div className="p-2 bg-yellow-50 rounded border border-yellow-200 text-sm">
+                      Enter the Ptag (printed tag) to see the discount.
+                    </div>
+                  );
+                }
+                const ptagDiscount = ((ptagValue - itemPrice) / ptagValue) * 100;
+                if (ptagDiscount < 0) {
+                  return (
+                    <>
+                      <div className="flex justify-between">
+                        <span>Ptag (Printed Tag):</span>
+                        <span className="font-medium">{ptagValue.toFixed(2)} AED</span>
+                      </div>
+                      <div className="p-2 bg-yellow-50 rounded border border-yellow-200 text-sm">
+                        Enter the discount %. Today's price is above the printed tag, so no discount is shown yet.
+                      </div>
+                    </>
+                  );
+                }
+                return (
+                  <>
+                    <div className="flex justify-between">
+                      <span>Ptag (Printed Tag):</span>
+                      <span className="font-medium">{ptagValue.toFixed(2)} AED</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Discount ({ptagDiscount.toFixed(0)}%):</span>
+                      <span className="font-medium">-{(ptagValue - itemPrice).toFixed(2)} AED</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Item Price (after discount):</span>
+                      <span className="font-medium">{itemPrice.toFixed(2)} AED</span>
+                    </div>
+                  </>
+                );
+              })()}
+              {method !== "nc" && <hr className="my-2" />}
               {method === "cash" && (
                 <>
                   <div className="flex justify-between text-lg font-bold">
                     <span>Total Price:</span>
-                    <span className="text-gray-700">{(Mtag * (1 - discount / 100)).toFixed(2)} AED</span>
+                    <span className="text-gray-700">{(dgPrice).toFixed(2)} AED</span>
                   </div>
                   <div className="flex justify-between">
                     <span>VAT (5%):</span>
-                    <span className="font-medium">{((Mtag * (1 - discount / 100)) * 0.05).toFixed(2)} AED</span>
+                    <span className="font-medium">{((dgPrice) * 0.05).toFixed(2)} AED</span>
                   </div>
                   <div className="flex justify-between text-xl font-bold bg-yellow-50 p-2 rounded border border-yellow-200">
                     <span>Total Bill (KT):</span>
-                    <span className="text-yellow-700">{((Mtag * (1 - discount / 100)) * 1.05).toFixed(2)} AED</span>
+                    <span className="text-yellow-700">{((dgPrice) * 1.05).toFixed(2)} AED</span>
                   </div>
                 </>
               )}
@@ -1465,37 +1487,69 @@ export default function App() {
                 <>
                   <div className="flex justify-between">
                     <span>VAT (5%):</span>
-                    <span className="font-medium">{((Mtag * (1 - discount / 100)) * 0.05).toFixed(2)} AED</span>
+                    <span className="font-medium">{((dgPrice) * 0.05).toFixed(2)} AED</span>
                   </div>
                   <div className="flex justify-between text-lg font-bold">
                     <span>Total Price:</span>
-                    <span className="text-gray-700">{((Mtag * (1 - discount / 100)) * 1.05).toFixed(2)} AED</span>
+                    <span className="text-gray-700">{((dgPrice) * 1.05).toFixed(2)} AED</span>
                   </div>
                   {salesView && (
                     <div className="flex justify-between text-sm bg-white p-2 rounded border border-gray-200">
                       <span className="text-gray-700">📈 ATF:</span>
-                      <span className="font-medium text-gray-800">{(((Mtag * (1 - discount / 100)) * 1.05) * f).toFixed(2)} AED</span>
+                      <span className="font-medium text-gray-800">{(((dgPrice) * 1.05) * f).toFixed(2)} AED</span>
                     </div>
                   )}
                   <div className="flex justify-between text-xl font-bold bg-yellow-50 p-2 rounded border border-yellow-200">
                     <span>Total Bill (AT):</span>
-                    <span className="text-yellow-700">{(((Mtag * (1 - discount / 100)) * 1.05) * (1 + f)).toFixed(2)} AED</span>
+                    <span className="text-yellow-700">{(((dgPrice) * 1.05) * (1 + f)).toFixed(2)} AED</span>
                   </div>
-                  {/* Adjusted Discount Calculator (No ATF) - Only in Sales View */}
-                  {salesView && (() => {
-                    const adjusted = calculateAdjustedDiscount();
-                    if (adjusted && adjusted.adjustedDiscount >= 0 && adjusted.adjustedDiscount <= 100) {
-                      return (
-                        <div className="flex justify-between text-sm mt-2 p-2 bg-gray-50 rounded border border-gray-200">
-                          <span className="text-gray-700">Adj Dis:</span>
-                          <span className="font-bold text-gray-800">{adjusted.adjustedDiscount.toFixed(2)}%</span>
-                        </div>
-                      );
-                    }
-                    return null;
-                  })()}
+                  
                 </>
               )}
+            {method === "nc" && (() => {
+                const ptagValue = parseFloat(itag) || 0;
+                const itemPrice = dgPrice;
+                if (ptagValue <= 0 || discount <= 0) {
+                  return <div className="p-2 bg-green-50 rounded border border-green-300 text-sm">Enter the Ptag and discount to see the NC (no card charge) price.</div>;
+                }
+                const ptagDisc = ((ptagValue - itemPrice) / ptagValue) * 100;
+                if (ptagDisc - f * (100 - ptagDisc) < 0) {
+                  return <div className="p-2 bg-green-50 rounded border border-green-300 text-sm">Discount is too small to cover the card fee, so NC can't be used here.</div>;
+                }
+                const ncDisc = Math.floor(ptagDisc - f * (100 - ptagDisc) + 1e-9); // rounded down to whole % so the fee is always covered; // exact: holds back the card fee (fee % x what customer pays)
+                const ncPrice = ptagValue * (1 - ncDisc / 100);
+                const ncTotal = ncPrice * 1.05;
+                const cashTotal = itemPrice * 1.05;
+                return (
+                  <div className="p-2 bg-green-50 rounded border border-green-300 space-y-1">
+                    <div className="text-xs font-semibold text-green-700">NC: No card charge</div>
+                    <div className="flex justify-between">
+                      <span>Ptag (Printed Tag):</span>
+                      <span className="font-medium">{ptagValue.toFixed(2)} AED</span>
+                    </div>
+                    <div className="flex justify-between text-lg font-bold">
+                      <span>Discount:</span>
+                      <span className="text-green-700">{ncDisc}%</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Discount on Ptag:</span>
+                      <span className="font-medium">-{(ptagValue - ncPrice).toFixed(2)} AED</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Item Price:</span>
+                      <span className="font-medium">{ncPrice.toFixed(2)} AED</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>VAT (5%):</span>
+                      <span className="font-medium">{(ncPrice * 0.05).toFixed(2)} AED</span>
+                    </div>
+                    <div className="flex justify-between text-xl font-bold bg-green-100 p-2 rounded border border-green-300">
+                      <span>Total Bill (NC):</span>
+                      <span className="text-green-700">{ncTotal.toFixed(2)} AED</span>
+                    </div>
+                  </div>
+                );
+              })()}
             </>
           ) : (
             // Gold calculation display (24K, 22K, 18K)

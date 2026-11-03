@@ -19,6 +19,19 @@ if (!existsSync(distPath)) {
   process.exit(1);
 }
 
+// Login gate: one username/password from Railway variables APP_USER and APP_PASS
+app.use((req, res, next) => {
+  const U = process.env.APP_USER, P = process.env.APP_PASS;
+  if (!U || !P || req.path === '/health') return next();
+  const h = req.headers.authorization || '';
+  if (h.startsWith('Basic ')) {
+    const [u, ...rest] = Buffer.from(h.slice(6), 'base64').toString().split(':');
+    if (u === U && rest.join(':') === P) return next();
+  }
+  res.set('WWW-Authenticate', 'Basic realm="Trichy Gold"');
+  return res.status(401).send('Login required');
+});
+
 // Set proper MIME types for PWA files
 app.use((req, res, next) => {
   if (req.path.endsWith('.webmanifest')) {
