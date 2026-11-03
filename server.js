@@ -1,6 +1,6 @@
 import express from 'express';
 import { fileURLToPath } from 'url';
-import { dirname, join, resolve } from 'path';
+import { dirname, join, resolve, sep } from 'path';
 import { existsSync } from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -43,16 +43,34 @@ app.use((req, res, next) => {
 });
 
 app.use(express.static(distPath, {
-  setHeaders: (res, path) => {
-    if (path.endsWith('.webmanifest')) {
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.webmanifest')) {
       res.setHeader('Content-Type', 'application/manifest+json');
+    }
+    // Always revalidate HTML / SW so new deploys are not stuck behind PWA cache
+    if (
+      filePath.endsWith('index.html') ||
+      filePath.endsWith('sw.js') ||
+      filePath.endsWith('registerSW.js') ||
+      filePath.endsWith('.webmanifest')
+    ) {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+    } else if (filePath.includes(`${sep}assets${sep}`)) {
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
     }
   }
 }));
 
-// Health check endpoint
+// Health check endpoint (includes Railway commit so you can verify the live deploy)
 app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'ok', distPath, port: PORT });
+  res.status(200).json({
+    status: 'ok',
+    distPath,
+    port: PORT,
+    commit: process.env.RAILWAY_GIT_COMMIT_SHA || 'local'
+  });
 });
 
 // Error handling middleware (must be before catch-all route)
@@ -65,6 +83,9 @@ app.use((err, req, res, next) => {
 app.get('*', (req, res) => {
   const indexPath = resolve(distPath, 'index.html');
   if (existsSync(indexPath)) {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
     res.sendFile(indexPath);
   } else {
     console.error(`Index file not found at: ${indexPath}`);
