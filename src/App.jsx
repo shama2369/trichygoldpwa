@@ -91,7 +91,8 @@ export default function App() {
   const f = (parseFloat(cardFee) || 0) / 100;
   // DiamondG: cash discount on the printed tag rounded DOWN to a whole %, and the bill worked from that %
   const dgPtag = parseFloat(itag) || 0;
-  const dgRawPrice = Mtag * (1 - discount / 100);
+  const dgBase = (jewelryType === "DiamondG" && dgPtag > Mtag) ? dgPtag : Mtag; // printed tag higher = keep purchase cost
+  const dgRawPrice = dgBase * (1 - discount / 100);
   const dgCashDisc = (jewelryType === "DiamondG" && dgPtag > 0 && discount > 0 && dgRawPrice <= dgPtag)
     ? Math.floor(((dgPtag - dgRawPrice) / dgPtag) * 100 + 1e-9) : null;
   const dgPrice = dgCashDisc !== null ? dgPtag * (1 - dgCashDisc / 100) : dgRawPrice;
