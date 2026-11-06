@@ -1,7 +1,7 @@
 import express from 'express';
 import { fileURLToPath } from 'url';
 import { dirname, join, resolve, sep } from 'path';
-import { existsSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -19,10 +19,16 @@ if (!existsSync(distPath)) {
   process.exit(1);
 }
 
-// Login gate: one username/password from Railway variables APP_USER and APP_PASS
+// Login gate: one username/password from Railway variables APP_USER and APP_PASS.
+// Keep SW update files public so Basic Auth does not trap users on an old PWA cache.
 app.use((req, res, next) => {
   const U = process.env.APP_USER, P = process.env.APP_PASS;
-  if (!U || !P || req.path === '/health') return next();
+  const openPath =
+    req.path === '/health' ||
+    req.path === '/sw.js' ||
+    req.path === '/registerSW.js' ||
+    req.path.startsWith('/workbox-');
+  if (!U || !P || openPath) return next();
   const h = req.headers.authorization || '';
   if (h.startsWith('Basic ')) {
     const [u, ...rest] = Buffer.from(h.slice(6), 'base64').toString().split(':');
@@ -63,13 +69,22 @@ app.use(express.static(distPath, {
   }
 }));
 
-// Health check endpoint (includes Railway commit so you can verify the live deploy)
+// Health check endpoint (includes Railway commit + built JS file so you can verify the live deploy)
 app.get('/health', (req, res) => {
+  let bundle = null;
+  try {
+    const html = readFileSync(resolve(distPath, 'index.html'), 'utf8');
+    const match = html.match(/\/assets\/(index-[^"]+\.js)/);
+    bundle = match ? match[1] : null;
+  } catch {
+    bundle = null;
+  }
   res.status(200).json({
     status: 'ok',
     distPath,
     port: PORT,
-    commit: process.env.RAILWAY_GIT_COMMIT_SHA || 'local'
+    commit: process.env.RAILWAY_GIT_COMMIT_SHA || 'local',
+    bundle
   });
 });
 

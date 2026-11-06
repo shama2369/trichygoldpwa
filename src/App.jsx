@@ -1756,6 +1756,9 @@ export default function App() {
       >
         📤 Export to Sheets (CSV)
       </button>
+      <p className="mt-3 text-center text-xs text-gray-400">
+        Build {__BUILD_ID__}
+      </p>
     </div>
   );
 }

@@ -3,14 +3,21 @@ import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
+  define: {
+    __BUILD_ID__: JSON.stringify(
+      (process.env.RAILWAY_GIT_COMMIT_SHA || 'local').slice(0, 7)
+    )
+  },
   server: {
     host: '0.0.0.0',
     port: 5173
   },
   plugins: [
     react(),
+    // selfDestroying clears stuck old service workers (Basic Auth was blocking SW updates)
     VitePWA({
       registerType: 'autoUpdate',
+      selfDestroying: true,
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
       manifestFilename: 'manifest.webmanifest',
       manifest: {
@@ -32,22 +39,9 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,webmanifest}'],
-        runtimeCaching: [
-          {
-            urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'google-fonts-cache',
-              expiration: {
-                maxEntries: 10,
-                maxAgeSeconds: 60 * 60 * 24 * 365 // 1 year
-              },
-              cacheableResponse: {
-                statuses: [0, 200]
-              }
-            }
-          }
-        ]
+        cleanupOutdatedCaches: true,
+        skipWaiting: true,
+        clientsClaim: true
       }
     })
   ]
