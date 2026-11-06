@@ -49,8 +49,8 @@ export default function App() {
       }
       const Pg = parseFloat(goldRate) || 0;
       const Dc = parseFloat(diamondCarat) || 0;
-      // Diamond price is fixed at 500 AED regardless of carat
-      const Dp = 500;
+      // Diamond price is fixed at 450 USD per carat (converted at 3.65)
+      const Dp = 450;
       // Making charge: 80 (fixed) for "Nose Pin", 75 per gram for "Other Items"
       let totalCost;
       if (diamondGType === "nosePin") {
@@ -515,7 +515,7 @@ export default function App() {
       <div className="w-full max-w-md mb-6">
         <h2 className="text-lg font-semibold mb-4 text-center">Select Jewelry Type</h2>
         <div className="grid grid-cols-2 gap-3">
-          {["24K", "22K", "18K", "Diamond", "DiamondG"].map((type) => (
+          {["24K", "22K", "18K", "DiamondG"].map((type) => (
             <button
               key={type}
               onClick={() => {
@@ -981,7 +981,7 @@ export default function App() {
             {/* Tag Price Display - Below Diamond Carat */}
             <div className="bg-white border border-gray-200 rounded p-3">
               <div className="flex justify-between items-center">
-                <label className="block text-sm font-medium">Tag Price</label>
+                <label className="block text-sm font-medium">Ctag (Current Tag)</label>
                 <span className="text-lg font-medium text-gray-800">
                   {Mtag > 0 ? Mtag.toFixed(2) : "0.00"} AED
                 </span>
@@ -1043,7 +1043,7 @@ export default function App() {
               if (itagCalc && itagCalc.discountPercent >= 0 && itagCalc.discountPercent <= 100) {
                 return (
                   <div className="mt-2 p-2 bg-blue-50 rounded border border-blue-200">
-                    <div className="text-xs text-gray-600 mb-1">Calculated Discount:</div>
+                    <div className="text-xs text-gray-600 mb-1">Calculated discount from the printed tag:</div>
                     <div className="flex justify-between items-center">
                       <span className="text-sm font-medium">Discount %:</span>
                       <span className="text-lg font-bold text-blue-700">
