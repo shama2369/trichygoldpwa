@@ -14,10 +14,10 @@ export default defineConfig({
   },
   plugins: [
     react(),
-    // selfDestroying clears stuck old service workers (Basic Auth was blocking SW updates)
+    // Service worker ON so the app can be installed (login is now cookie-based, not Basic Auth)
     VitePWA({
       registerType: 'autoUpdate',
-      selfDestroying: true,
+      selfDestroying: false,
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
       manifestFilename: 'manifest.webmanifest',
       manifest: {

@@ -2,6 +2,7 @@ import express from 'express';
 import { fileURLToPath } from 'url';
 import { dirname, join, resolve, sep } from 'path';
 import { existsSync, readFileSync } from 'fs';
+import { createHmac, timingSafeEqual } from 'crypto';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -19,22 +20,79 @@ if (!existsSync(distPath)) {
   process.exit(1);
 }
 
+app.set('trust proxy', 1);
+
 // Login gate: one username/password from Railway variables APP_USER and APP_PASS.
-// Keep SW update files public so Basic Auth does not trap users on an old PWA cache.
+// Staff log in ONCE on a login page; a long-lived cookie keeps them signed in
+// (also inside the installed app). Install files (manifest, icons, service worker)
+// stay public so the browser can offer "Install".
+const AUTH_COOKIE = 'tg_auth';
+const AUTH_MAX_AGE_MS = 400 * 24 * 60 * 60 * 1000; // ~400 days (browser maximum)
+const authToken = (u, p) => createHmac('sha256', String(p)).update('trichygold:' + String(u)).digest('hex');
+const readCookie = (req, name) => {
+  const raw = req.headers.cookie || '';
+  for (const part of raw.split(';')) {
+    const i = part.indexOf('=');
+    if (i > -1 && part.slice(0, i).trim() === name) return decodeURIComponent(part.slice(i + 1).trim());
+  }
+  return '';
+};
+const safeEqual = (a, b) => {
+  const A = Buffer.from(String(a)), B = Buffer.from(String(b));
+  return A.length === B.length && timingSafeEqual(A, B);
+};
+const isPublicPath = (p) =>
+  p === '/health' ||
+  p === '/login' ||
+  p === '/sw.js' ||
+  p === '/registerSW.js' ||
+  p.startsWith('/workbox-') ||
+  p === '/manifest.webmanifest' ||
+  p === '/favicon.ico' ||
+  p === '/apple-touch-icon.png' ||
+  p === '/masked-icon.svg' ||
+  /^\/icon-[\w-]+\.png$/.test(p);
+const loginPage = (error = '') => `<!doctype html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#7c3aed">
+<link rel="manifest" href="/manifest.webmanifest"><title>Trichy Gold - Login</title>
+<style>body{font-family:system-ui,sans-serif;background:#f5f3ff;display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0}
+form{background:#fff;padding:28px;border-radius:14px;box-shadow:0 4px 20px rgba(0,0,0,.08);width:min(320px,90vw)}
+h1{font-size:20px;margin:0 0 16px;color:#5b21b6}input{width:100%;box-sizing:border-box;padding:12px;margin:6px 0 12px;border:1px solid #ccc;border-radius:8px;font-size:16px}
+button{width:100%;padding:12px;background:#7c3aed;color:#fff;border:0;border-radius:8px;font-size:16px}.e{color:#b91c1c;margin-bottom:10px}</style></head>
+<body><form method="post" action="/login"><h1>Trichy Gold</h1>${error ? `<div class="e">${error}</div>` : ''}
+<label>Username<input name="username" autocomplete="username" required></label>
+<label>Password<input name="password" type="password" autocomplete="current-password" required></label>
+<button type="submit">Log in</button></form></body></html>`;
+
+app.get('/login', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  res.send(loginPage());
+});
+app.post('/login', express.urlencoded({ extended: false }), (req, res) => {
+  const U = process.env.APP_USER, P = process.env.APP_PASS;
+  if (!U || !P) return res.redirect('/');
+  const { username = '', password = '' } = req.body || {};
+  if (safeEqual(username, U) && safeEqual(password, P)) {
+    const secure = req.secure || req.headers['x-forwarded-proto'] === 'https';
+    res.cookie(AUTH_COOKIE, authToken(U, P), {
+      httpOnly: true, sameSite: 'lax', secure, maxAge: AUTH_MAX_AGE_MS, path: '/'
+    });
+    return res.redirect('/');
+  }
+  res.status(401).setHeader('Cache-Control', 'no-store');
+  return res.send(loginPage('Wrong username or password'));
+});
+app.get('/logout', (req, res) => {
+  res.clearCookie(AUTH_COOKIE, { path: '/' });
+  res.redirect('/login');
+});
+
 app.use((req, res, next) => {
   const U = process.env.APP_USER, P = process.env.APP_PASS;
-  const openPath =
-    req.path === '/health' ||
-    req.path === '/sw.js' ||
-    req.path === '/registerSW.js' ||
-    req.path.startsWith('/workbox-');
-  if (!U || !P || openPath) return next();
-  const h = req.headers.authorization || '';
-  if (h.startsWith('Basic ')) {
-    const [u, ...rest] = Buffer.from(h.slice(6), 'base64').toString().split(':');
-    if (u === U && rest.join(':') === P) return next();
-  }
-  res.set('WWW-Authenticate', 'Basic realm="Trichy Gold"');
+  if (!U || !P || isPublicPath(req.path)) return next();
+  if (safeEqual(readCookie(req, AUTH_COOKIE), authToken(U, P))) return next();
+  const wantsPage = req.method === 'GET' && (req.headers.accept || '').includes('text/html');
+  if (wantsPage) return res.redirect('/login');
   return res.status(401).send('Login required');
 });
 
